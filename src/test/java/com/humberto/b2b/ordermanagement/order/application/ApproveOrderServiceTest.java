@@ -7,7 +7,6 @@ import com.humberto.b2b.ordermanagement.order.domain.InvalidOrderTransitionExcep
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
-import com.humberto.b2b.ordermanagement.partner.domain.InsufficientCreditException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -95,7 +94,7 @@ class ApproveOrderServiceTest {
         ApproveOrderService service = serviceFor(Optional.of(order), savedOrders,
                 (id, amount) -> false);
 
-        assertThrows(InsufficientCreditException.class, () -> service.approve(order.id()));
+        assertThrows(InsufficientOrderCreditException.class, () -> service.approve(order.id()));
 
         assertEquals(List.of(), savedOrders);
         assertEquals(OrderStatus.PENDENTE, order.status());

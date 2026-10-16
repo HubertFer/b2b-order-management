@@ -5,6 +5,7 @@ import com.humberto.b2b.ordermanagement.order.application.port.out.SaveOrderPort
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import com.humberto.b2b.ordermanagement.partner.domain.Partner;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.util.List;
@@ -22,6 +23,7 @@ public class CreateOrderService {
         this.clock = clock;
     }
 
+    @Transactional
     public Order create(UUID partnerId, List<OrderItem> items) {
         Partner partner = findPartnerPort.findById(partnerId)
                 .orElseThrow(() -> new PartnerNotFoundException(partnerId));
