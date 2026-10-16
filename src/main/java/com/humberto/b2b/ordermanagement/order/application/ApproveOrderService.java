@@ -1,0 +1,43 @@
+package com.humberto.b2b.ordermanagement.order.application;
+
+import com.humberto.b2b.ordermanagement.order.application.port.out.DebitPartnerCreditPort;
+import com.humberto.b2b.ordermanagement.order.application.port.out.FindOrderForUpdatePort;
+import com.humberto.b2b.ordermanagement.order.application.port.out.SaveOrderPort;
+import com.humberto.b2b.ordermanagement.order.domain.Order;
+import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import com.humberto.b2b.ordermanagement.partner.domain.InsufficientCreditException;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Clock;
+import java.util.UUID;
+
+@Service
+public class ApproveOrderService {
+
+    private final FindOrderForUpdatePort findOrderForUpdatePort;
+    private final DebitPartnerCreditPort debitPartnerCreditPort;
+    private final SaveOrderPort saveOrderPort;
+    private final Clock clock;
+
+    public ApproveOrderService(FindOrderForUpdatePort findOrderForUpdatePort,
+                               DebitPartnerCreditPort debitPartnerCreditPort,
+                               SaveOrderPort saveOrderPort,
+                               Clock clock) {
+        this.findOrderForUpdatePort = findOrderForUpdatePort;
+        this.debitPartnerCreditPort = debitPartnerCreditPort;
+        this.saveOrderPort = saveOrderPort;
+        this.clock = clock;
+    }
+
+    @Transactional
+    public Order approve(UUID orderId) {
+        Order order = findOrderForUpdatePort.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        Order approvedOrder = order.transitionTo(OrderStatus.APROVADO, clock.instant());
+        if (!debitPartnerCreditPort.debitIfAvailable(order.partnerId(), order.total())) {
+            throw new InsufficientCreditException();
+        }
+        return saveOrderPort.save(approvedOrder);
+    }
+}
