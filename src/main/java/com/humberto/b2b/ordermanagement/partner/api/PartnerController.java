@@ -4,6 +4,7 @@ import com.humberto.b2b.ordermanagement.partner.application.CreatePartnerService
 import com.humberto.b2b.ordermanagement.partner.application.GetPartnerService;
 import com.humberto.b2b.ordermanagement.partner.domain.Partner;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -54,7 +55,10 @@ class PartnerController {
     @ApiResponse(responseCode = "200", description = "Partner found")
     @ApiResponse(responseCode = "404", description = "Partner not found",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    PartnerResponse getById(@PathVariable UUID id) {
+    PartnerResponse getById(
+            @Parameter(description = "Partner identifier returned by POST /partners",
+                    example = "22222222-2222-2222-2222-222222222222")
+            @PathVariable UUID id) {
         return PartnerResponse.from(getPartnerService.getById(id));
     }
 }

@@ -28,7 +28,7 @@ If ports `8080` or `5432` are already in use on your machine, choose other host 
 APP_PORT=9090 POSTGRES_PORT=15432 docker compose up --build
 ```
 
-- Swagger UI: http://localhost:8080/swagger-ui/index.html
+- Swagger UI: http://localhost:8080/swagger-ui/index.html. Every request and response field has a description and an example, and the examples work as-is against the Compose environment: "Try it out" on `POST /orders` uses the demo partner `22222222-2222-2222-2222-222222222222`.
 - OpenAPI (JSON): http://localhost:8080/v3/api-docs
 - Health: http://localhost:8080/actuator/health, with `/liveness` and `/readiness` probes
 
@@ -114,29 +114,98 @@ Errors use the `ProblemDetail` format (RFC 9457) with content type `application/
 | 409 | Status transition not allowed |
 | 422 | Partner not found, without available credit, or `Idempotency-Key` reused with a different request |
 
-### Example
+### Walkthrough
+
+Every step can also be run from the Swagger UI. The walkthrough uses the demo partner seeded by Compose; to use your own partner, register it in step 1 and use the returned `id` as `partnerId`. Replace `{orderId}` with the `id` returned in step 2.
+
+**1. Register a partner** (or use the demo partner `22222222-2222-2222-2222-222222222222`)
 
 ```bash
 curl -X POST http://localhost:8080/partners \
-  -H 'Content-Type: application/json' -d '{"creditLimit": 500.00}'
+  -H 'Content-Type: application/json' \
+  -d '{"creditLimit": 1000.00}'
+```
 
+`201 Created`
+
+```json
+{"id": "8f0b95e7-8c92-43fb-adb0-0a5f13023db8", "creditLimit": 1000.00, "usedCredit": 0.00, "availableCredit": 1000.00}
+```
+
+**2. Create an order** (`Idempotency-Key` is optional)
+
+```bash
 curl -X POST http://localhost:8080/orders \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: 7f3c2a90-order-001' \
   -d '{
-        "partnerId": "{partnerId}",
+        "partnerId": "22222222-2222-2222-2222-222222222222",
         "items": [
-          {"productId": "33333333-3333-3333-3333-333333333333", "quantity": 3, "unitPrice": 100.00}
+          {"productId": "33333333-3333-3333-3333-333333333333", "quantity": 2, "unitPrice": 100.00}
         ]
       }'
-
-curl -X POST http://localhost:8080/orders/{id}/approve
-curl -X PATCH http://localhost:8080/orders/{id}/status \
-  -H 'Content-Type: application/json' -d '{"status": "EM_PROCESSAMENTO"}'
-curl -X POST http://localhost:8080/orders/{id}/cancel
-curl 'http://localhost:8080/orders?status=CANCELADO&createdFrom=2026-01-01T00:00:00Z'
-curl http://localhost:8080/partners/{partnerId}
 ```
+
+`201 Created` (repeating the same request with the same key returns `200 OK` with the same order)
+
+```json
+{
+  "id": "0a3dff20-b5b1-458b-be17-16bdf4436a95",
+  "partnerId": "22222222-2222-2222-2222-222222222222",
+  "items": [{"productId": "33333333-3333-3333-3333-333333333333", "quantity": 2, "unitPrice": 100.00}],
+  "total": 200.00,
+  "status": "PENDENTE",
+  "createdAt": "2026-10-17T12:00:00Z",
+  "updatedAt": "2026-10-17T12:00:00Z"
+}
+```
+
+**3. Approve it** (debits the partner's credit)
+
+```bash
+curl -X PATCH http://localhost:8080/orders/{orderId}/status \
+  -H 'Content-Type: application/json' \
+  -d '{"status": "APROVADO"}'
+```
+
+`200 OK` with the order in status `APROVADO`. `POST /orders/{orderId}/approve` does the same. The log shows the notification:
+
+```
+Notification sent: eventType=ORDER_STATUS_CHANGED ... "previousStatus": "PENDENTE", "newStatus": "APROVADO" ...
+```
+
+**4. Check the credit**
+
+```bash
+curl http://localhost:8080/partners/22222222-2222-2222-2222-222222222222
+```
+
+```json
+{"id": "22222222-2222-2222-2222-222222222222", "creditLimit": 500.00, "usedCredit": 200.00, "availableCredit": 300.00}
+```
+
+**5. Move it forward or cancel it**
+
+```bash
+curl -X PATCH http://localhost:8080/orders/{orderId}/status \
+  -H 'Content-Type: application/json' -d '{"status": "EM_PROCESSAMENTO"}'
+
+curl -X POST http://localhost:8080/orders/{orderId}/cancel
+```
+
+Cancelling an approved or processing order returns the `200.00` to the partner's available credit.
+
+**6. Search**
+
+```bash
+curl 'http://localhost:8080/orders?status=CANCELADO&createdFrom=2026-10-01T00:00:00Z&createdTo=2026-11-01T00:00:00Z&page=0&size=20'
+```
+
+```json
+{"content": [{"id": "0a3dff20-b5b1-458b-be17-16bdf4436a95", "status": "CANCELADO", "...": "..."}], "page": 0, "size": 20, "totalElements": 1, "totalPages": 1}
+```
+
+The demo partner has a 500.00 limit, so it can approve the order above twice; register a partner with a larger limit to run the walkthrough more times.
 
 ## Business rules
 

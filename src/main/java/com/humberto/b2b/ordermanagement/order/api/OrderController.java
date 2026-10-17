@@ -76,7 +76,9 @@ class OrderController {
             description = "Partner not found, without available credit, or Idempotency-Key reused with a different request",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     ResponseEntity<OrderResponse> create(
-            @Parameter(description = "Client-generated key, unique per partner, that makes retries safe")
+            @Parameter(description = "Optional client-generated key, unique per partner (1 to 100 printable ASCII characters). "
+                    + "Repeating a request with the same key returns the order created by the first one",
+                    example = "7f3c2a90-order-001")
             @RequestHeader(name = "Idempotency-Key", required = false)
             @Size(min = 1, max = 100) @Pattern(regexp = "[\\x21-\\x7E]+") String idempotencyKey,
             @Valid @RequestBody CreateOrderRequest request) {
@@ -96,11 +98,19 @@ class OrderController {
             description = "All filters are optional. The period includes createdFrom and excludes createdTo. "
                     + "Results are sorted from newest to oldest.")
     @ApiResponse(responseCode = "200", description = "Page of orders")
-    OrderPageResponse search(@RequestParam(required = false) OrderStatus status,
-                             @RequestParam(required = false) Instant createdFrom,
-                             @RequestParam(required = false) Instant createdTo,
-                             @RequestParam(defaultValue = "0") @Min(0) int page,
-                             @RequestParam(defaultValue = "20") @Min(1) @Max(SearchOrdersService.MAX_PAGE_SIZE) int size) {
+    OrderPageResponse search(
+            @Parameter(description = "Only orders in this status")
+            @RequestParam(required = false) OrderStatus status,
+            @Parameter(description = "Only orders created at or after this instant (ISO-8601, UTC)",
+                    example = "2026-10-01T00:00:00Z")
+            @RequestParam(required = false) Instant createdFrom,
+            @Parameter(description = "Only orders created before this instant (ISO-8601, UTC); must be after createdFrom",
+                    example = "2026-11-01T00:00:00Z")
+            @RequestParam(required = false) Instant createdTo,
+            @Parameter(description = "Zero-based page number")
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "Page size, from 1 to 100")
+            @RequestParam(defaultValue = "20") @Min(1) @Max(SearchOrdersService.MAX_PAGE_SIZE) int size) {
         OrderSearchCriteria criteria = new OrderSearchCriteria(status, createdFrom, createdTo);
         return OrderPageResponse.from(searchOrdersService.search(criteria, page, size));
     }
@@ -110,7 +120,7 @@ class OrderController {
     @ApiResponse(responseCode = "200", description = "Order found")
     @ApiResponse(responseCode = "404", description = "Order not found",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    OrderResponse getById(@PathVariable UUID id) {
+    OrderResponse getById(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(getOrderService.getById(id));
     }
 
@@ -124,7 +134,7 @@ class OrderController {
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "422", description = "Partner without available credit",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    OrderResponse approve(@PathVariable UUID id) {
+    OrderResponse approve(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(approveOrderService.approve(id));
     }
 
@@ -139,7 +149,7 @@ class OrderController {
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "422", description = "Partner without available credit for approval",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    OrderResponse changeStatus(@PathVariable UUID id, @Valid @RequestBody ChangeOrderStatusRequest request) {
+    OrderResponse changeStatus(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id, @Valid @RequestBody ChangeOrderStatusRequest request) {
         Order order = switch (request.status()) {
             case APROVADO -> approveOrderService.approve(id);
             case CANCELADO -> cancelOrderService.cancel(id);
@@ -157,7 +167,7 @@ class OrderController {
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Order can no longer be cancelled",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
-    OrderResponse cancel(@PathVariable UUID id) {
+    OrderResponse cancel(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(cancelOrderService.cancel(id));
     }
 }
