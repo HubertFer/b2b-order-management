@@ -90,7 +90,20 @@ Integration tests start PostgreSQL with Testcontainers, so Docker must be runnin
 | `PATCH` | `/orders/{id}/status` | Moves the order to `EM_PROCESSAMENTO`, `ENVIADO` or `ENTREGUE` |
 | `POST` | `/orders/{id}/cancel` | Cancels the order and refunds the credit if it was debited |
 
-Errors use the `ProblemDetail` format (RFC 9457):
+Errors use the `ProblemDetail` format (RFC 9457) with content type `application/problem+json`. Validation errors also list the fields that failed:
+
+```json
+{
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "Validation failure",
+  "instance": "/orders",
+  "errors": [
+    {"field": "items[0].quantity", "message": "must be greater than 0"},
+    {"field": "items[0].unitPrice", "message": "numeric value out of bounds (<17 digits>.<2 digits> expected)"}
+  ]
+}
+```
 
 | Status | When |
 |---|---|
@@ -140,6 +153,7 @@ PENDENTE ──► APROVADO ──► EM_PROCESSAMENTO ──► ENVIADO ──�
 ### Credit
 
 - **Amounts:** prices and credit limits have at most two decimal places; requests with more are rejected with `400` instead of being rounded. Responses always show amounts with two decimal places.
+- **Limits:** an order has at most 100 items, each with a quantity of at most 1,000,000, and its total must fit the `NUMERIC(19,2)` columns (17 integer digits). Larger orders are rejected with `400`.
 - **Creation:** checks that the available credit (`limit - used`) covers the order total. Nothing is debited.
 - **Approval:** debits the order total from the partner's credit.
 - **Cancellation:** if the order had already been approved (`APROVADO` or `EM_PROCESSAMENTO`), the total is returned to the partner's available credit. Cancelling a `PENDENTE` order does not change the credit.
@@ -156,7 +170,7 @@ Approval must prevent negative balances and double approvals, even under concurr
    update partner set used_credit = used_credit + :amount
     where id = :id and credit_limit - used_credit >= :amount
    ```
-   If no row is updated, there is not enough credit and the whole transaction is rolled back. Different orders from the same partner cannot exceed the limit without needing a lock on the partner row.
+   If no row is updated, there is not enough credit and the whole transaction is rolled back. Because the check and the debit happen in the same statement, concurrent approvals for the same partner cannot exceed the limit, and no `SELECT ... FOR UPDATE` on the partner is needed; PostgreSQL holds the partner row only until the approval transaction commits.
 3. A `CHECK` constraint (`used_credit >= 0 AND used_credit <= credit_limit`) is the final guarantee in the database.
 
 Refunds follow the same pattern, with `used_credit >= :amount` as the condition.

@@ -70,6 +70,18 @@ class OrderTest {
     }
 
     @Test
+    void rejectsTotalAboveSupportedAmount() {
+        UUID partnerId = UUID.randomUUID();
+        Instant createdAt = Instant.parse("2026-10-15T12:00:00Z");
+        BigDecimal largestPrice = new BigDecimal("99999999999999999.99");
+
+        assertEquals(largestPrice,
+                Order.create(partnerId, List.of(new OrderItem(UUID.randomUUID(), 1, largestPrice)), createdAt).total());
+        assertThrows(IllegalArgumentException.class,
+                () -> Order.create(partnerId, List.of(new OrderItem(UUID.randomUUID(), 2, largestPrice)), createdAt));
+    }
+
+    @Test
     void allowsConfiguredTransitionsAndUpdatesTimestampWithoutChangingOriginal() {
         Instant createdAt = Instant.parse("2026-10-15T12:00:00Z");
         Instant changedAt = createdAt.plusSeconds(60);

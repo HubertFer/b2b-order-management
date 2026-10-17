@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -122,6 +124,51 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest());
         postOrder(orderJson(UUID.randomUUID(), 1, "10.123"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void describesValidationErrorsAsProblemDetail() throws Exception {
+        postOrder(orderJson(UUID.randomUUID(), 0, "10.00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors[0].field").value("items[0].quantity"))
+                .andExpect(jsonPath("$.errors[0].message").exists());
+        mockMvc.perform(get("/orders").param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[0].field").value("size"));
+    }
+
+    @Test
+    void describesMalformedRequestsAsProblemDetail() throws Exception {
+        postOrder("{not json")
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(get("/orders").param("status", "DESCONHECIDO"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(get("/orders/{id}", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void rejectsOversizedOrders() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String item = "{\"productId\": \"%s\", \"quantity\": 1, \"unitPrice\": 1.00}".formatted(UUID.randomUUID());
+        String tooManyItems = "{\"partnerId\": \"%s\", \"items\": [%s]}"
+                .formatted(partnerId, String.join(",", Collections.nCopies(101, item)));
+
+        postOrder(tooManyItems)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("items"));
+        postOrder(orderJson(partnerId, 1_000_001, "1.00"))
+                .andExpect(status().isBadRequest());
+        postOrder(orderJson(partnerId, 2, "99999999999999999.00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON));
+        assertEquals(0, countOrders(partnerId));
     }
 
     @Test

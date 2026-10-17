@@ -2,6 +2,7 @@ package com.humberto.b2b.ordermanagement.order.api;
 
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -11,7 +12,7 @@ import java.util.UUID;
 
 record OrderItemRequest(
         @NotNull UUID productId,
-        @NotNull @Positive Integer quantity,
+        @NotNull @Positive @Max(1_000_000) Integer quantity,
         @NotNull @PositiveOrZero @Digits(integer = 17, fraction = 2) BigDecimal unitPrice
 ) {
 
