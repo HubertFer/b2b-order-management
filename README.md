@@ -37,6 +37,32 @@ This data is only loaded when `SPRING_FLYWAY_LOCATIONS` includes `classpath:db/d
 
 To stop and remove all data: `docker compose down -v`.
 
+### Running the application outside a container
+
+Requirements: Java 21 and Docker (only for the database). Useful for development and debugging.
+
+**With a temporary database (Testcontainers):**
+
+```bash
+./mvnw spring-boot:test-run
+```
+
+A throwaway PostgreSQL container is started and removed automatically. It starts empty, without demo partners, so register partners with `POST /partners`.
+
+**With the Compose database:**
+
+```bash
+docker compose up -d --wait postgres
+
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/orders \
+SPRING_DATASOURCE_USERNAME=orders \
+SPRING_DATASOURCE_PASSWORD=orders \
+SPRING_FLYWAY_LOCATIONS=classpath:db/migration,classpath:db/demo \
+./mvnw spring-boot:run
+```
+
+Keep `SPRING_FLYWAY_LOCATIONS` the same as in `compose.yaml`: once the demo partners are loaded into the database, Flyway refuses to start without the `db/demo` location.
+
 ### Tests
 
 ```bash
@@ -170,6 +196,24 @@ Using a real broker only requires another `NotificationPublisher` implementation
 | `management.endpoints.web.exposure.include` | `health` | Only the health endpoint is exposed over HTTP |
 
 Every property can be overridden with an environment variable, for example `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE=40`.
+
+## Scalability
+
+The service is designed to run as several identical instances behind a load balancer, with PostgreSQL as the single source of truth.
+
+- **Stateless instances.** No session or in-memory state is shared between requests. Any instance can serve any request, and the readiness probe tells the load balancer when an instance can receive traffic.
+- **Fine-grained locking.** There is no global lock. Approvals and cancellations lock only the order being changed, and the partner credit is updated by a single conditional `UPDATE`, which holds the partner row only until the short approval transaction commits. Orders from different partners never wait for each other.
+- **Safe retries.** `Idempotency-Key` lets clients and gateways retry `POST /orders` after timeouts without creating duplicates, even when the retries land on different instances.
+- **Outbox across instances.** Every instance runs the outbox relay. `FOR UPDATE SKIP LOCKED` lets them split pending events instead of publishing the same event twice or waiting for each other.
+- **Efficient reads.** Searches are paginated (maximum page size of 100) and backed by indexes on `status`, `created_at` and `partner_id`. Order items of a page are loaded in batches instead of one query per order. Read endpoints use read-only transactions, and `open-in-view` is disabled so connections are released as soon as the transaction ends.
+- **Bounded resources.** Virtual threads accept many concurrent requests cheaply, while the connection pool caps the load each instance puts on the database. The short connection timeout turns overload into fast errors instead of growing queues.
+
+### Limits and next steps
+
+- **Database connections.** The number of instances times `maximum-pool-size` must stay below PostgreSQL's `max_connections` (100 by default). Beyond that, a connection pooler such as PgBouncer is the next step.
+- **Hot partners.** Approvals for the same partner serialize on that partner's row. This is the price of never exceeding the credit limit; each approval holds the row only for a few milliseconds.
+- **Read scaling.** Searches could be moved to a read replica if read traffic outgrows the primary database.
+- **Real messaging.** Replacing `LoggingNotificationPublisher` with a Kafka or RabbitMQ publisher keeps the same delivery guarantees, since the outbox already decouples the order transaction from the broker.
 
 ## Architecture
 
