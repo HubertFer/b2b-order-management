@@ -92,7 +92,7 @@ Integration tests start PostgreSQL with Testcontainers, so Docker must be runnin
 | `PATCH` | `/orders/{id}/status` | Moves the order to any status allowed by the lifecycle; `APROVADO` and `CANCELADO` apply the same credit rules as `/approve` and `/cancel` |
 | `POST` | `/orders/{id}/cancel` | Cancels the order and refunds the credit if it was debited |
 
-Errors use the `ProblemDetail` format (RFC 9457) with content type `application/problem+json`. Validation errors also list the fields that failed:
+Errors use the `ProblemDetail` format (RFC 9457) with content type `application/problem+json`. Request bodies are strict: a field that is not part of the request, such as `id` or `usedCredit` sent to `POST /partners`, is rejected with `400` instead of being silently ignored. Validation errors also list the fields that failed:
 
 ```json
 {

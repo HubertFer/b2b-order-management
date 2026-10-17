@@ -42,7 +42,7 @@ import java.util.UUID;
 @RequestMapping("/orders")
 @Tag(name = "Orders", description = "Creation, lookup and lifecycle of B2B orders")
 @ApiResponse(responseCode = "400", description = "Invalid request",
-        content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+        content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 class OrderController {
 
     private final CreateOrderService createOrderService;
@@ -74,7 +74,7 @@ class OrderController {
     @ApiResponse(responseCode = "200", description = "Order already created with this Idempotency-Key")
     @ApiResponse(responseCode = "422",
             description = "Partner not found, without available credit, or Idempotency-Key reused with a different request",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     ResponseEntity<OrderResponse> create(
             @Parameter(description = "Optional client-generated key, unique per partner (1 to 100 printable ASCII characters). "
                     + "Repeating a request with the same key returns the order created by the first one",
@@ -119,7 +119,7 @@ class OrderController {
     @Operation(summary = "Gets an order by id")
     @ApiResponse(responseCode = "200", description = "Order found")
     @ApiResponse(responseCode = "404", description = "Order not found",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse getById(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(getOrderService.getById(id));
     }
@@ -129,11 +129,11 @@ class OrderController {
             description = "Atomically debits the order total from the partner's credit.")
     @ApiResponse(responseCode = "200", description = "Order approved")
     @ApiResponse(responseCode = "404", description = "Order not found",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Order is not PENDENTE",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "422", description = "Partner without available credit",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse approve(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(approveOrderService.approve(id));
     }
@@ -144,11 +144,11 @@ class OrderController {
                     + "like POST /approve, and CANCELADO refunds it when needed like POST /cancel.")
     @ApiResponse(responseCode = "200", description = "Status updated")
     @ApiResponse(responseCode = "404", description = "Order not found",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Status transition not allowed",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "422", description = "Partner without available credit for approval",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse changeStatus(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id, @Valid @RequestBody ChangeOrderStatusRequest request) {
         Order order = switch (request.status()) {
             case APROVADO -> approveOrderService.approve(id);
@@ -164,9 +164,9 @@ class OrderController {
                     + "the credit is refunded to the partner.")
     @ApiResponse(responseCode = "200", description = "Order cancelled")
     @ApiResponse(responseCode = "404", description = "Order not found",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Order can no longer be cancelled",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse cancel(@Parameter(description = "Order identifier returned by POST /orders") @PathVariable UUID id) {
         return OrderResponse.from(cancelOrderService.cancel(id));
     }

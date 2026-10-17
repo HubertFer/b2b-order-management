@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequestMapping("/partners")
 @Tag(name = "Partners", description = "Partner registration and credit balance")
 @ApiResponse(responseCode = "400", description = "Invalid request",
-        content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+        content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
 class PartnerController {
 
     private final CreatePartnerService createPartnerService;
@@ -54,7 +54,7 @@ class PartnerController {
     @Operation(summary = "Gets a partner with its credit balance")
     @ApiResponse(responseCode = "200", description = "Partner found")
     @ApiResponse(responseCode = "404", description = "Partner not found",
-            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+            content = @Content(mediaType = "application/problem+json", schema = @Schema(implementation = ProblemDetail.class)))
     PartnerResponse getById(
             @Parameter(description = "Partner identifier returned by POST /partners",
                     example = "22222222-2222-2222-2222-222222222222")

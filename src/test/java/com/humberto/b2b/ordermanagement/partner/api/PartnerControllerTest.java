@@ -85,6 +85,18 @@ class PartnerControllerTest {
     }
 
     @Test
+    void rejectsResponseFieldsSentInTheRequest() throws Exception {
+        createPartner("""
+                {"id": "22222222-2222-2222-2222-222222222222", "creditLimit": 1000,
+                 "usedCredit": 200, "availableCredit": 800}
+                """)
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Unknown field: id"))
+                .andExpect(jsonPath("$.errors[0].field").value("id"));
+    }
+
+    @Test
     void returnsNotFoundForUnknownPartner() throws Exception {
         mockMvc.perform(get("/partners/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());

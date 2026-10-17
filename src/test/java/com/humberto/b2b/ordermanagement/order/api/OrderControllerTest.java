@@ -154,6 +154,19 @@ class OrderControllerTest {
     }
 
     @Test
+    void rejectsUnknownFields() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+
+        postOrder("""
+                {"partnerId": "%s", "items": [{"productId": "%s", "quantity": 1, "unitPrice": 10.00, "discount": 5}]}
+                """.formatted(partnerId, UUID.randomUUID()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors[0].field").value("items[0].discount"));
+        assertEquals(0, countOrders(partnerId));
+    }
+
+    @Test
     void rejectsOversizedOrders() throws Exception {
         UUID partnerId = insertPartner("100.00");
         String item = "{\"productId\": \"%s\", \"quantity\": 1, \"unitPrice\": 1.00}".formatted(UUID.randomUUID());

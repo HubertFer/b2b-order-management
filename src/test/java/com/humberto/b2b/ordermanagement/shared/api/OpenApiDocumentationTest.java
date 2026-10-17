@@ -71,6 +71,17 @@ class OpenApiDocumentationTest {
     }
 
     @Test
+    void declaresResponseMediaTypes() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.paths['/partners'].post.responses['201'].content['application/json']").exists())
+                .andExpect(jsonPath("$.paths['/orders'].post.responses['201'].content['application/json']").exists())
+                .andExpect(jsonPath("$.paths['/orders'].post.responses['422'].content['application/problem+json']")
+                        .exists())
+                .andExpect(jsonPath("$.paths['/orders/{id}'].get.responses['404'].content['application/problem+json']")
+                        .exists());
+    }
+
+    @Test
     void servesSwaggerUi() throws Exception {
         mockMvc.perform(get("/swagger-ui/index.html"))
                 .andExpect(status().isOk());
