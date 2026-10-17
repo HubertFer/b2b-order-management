@@ -15,6 +15,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.everyItem;
@@ -119,6 +120,23 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest());
         postOrder(orderJson(UUID.randomUUID(), 1, "-1.00"))
                 .andExpect(status().isBadRequest());
+        postOrder(orderJson(UUID.randomUUID(), 1, "10.123"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void formatsMoneyWithTwoDecimalPlaces() throws Exception {
+        String created = postOrder(orderJson(insertPartner("100.00"), 3, "10"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String orderId = JsonPath.read(created, "$.id");
+        String fetched = mockMvc.perform(get("/orders/{id}", orderId))
+                .andReturn().getResponse().getContentAsString();
+
+        for (String body : List.of(created, fetched)) {
+            assertTrue(body.contains("\"total\":30.00"), body);
+            assertTrue(body.contains("\"unitPrice\":10.00"), body);
+        }
     }
 
     @Test

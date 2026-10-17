@@ -12,6 +12,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,6 +66,21 @@ class PartnerControllerTest {
         mockMvc.perform(get("/partners/{id}", partnerId))
                 .andExpect(jsonPath("$.usedCredit").value(0.0))
                 .andExpect(jsonPath("$.availableCredit").value(100.0));
+    }
+
+    @Test
+    void formatsCreditWithTwoDecimalPlaces() throws Exception {
+        String created = createPartner("{\"creditLimit\": 100}")
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String fetched = mockMvc.perform(get("/partners/{id}", (String) JsonPath.read(created, "$.id")))
+                .andReturn().getResponse().getContentAsString();
+
+        for (String body : List.of(created, fetched)) {
+            assertTrue(body.contains("\"creditLimit\":100.00"), body);
+            assertTrue(body.contains("\"usedCredit\":0.00"), body);
+            assertTrue(body.contains("\"availableCredit\":100.00"), body);
+        }
     }
 
     @Test

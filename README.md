@@ -133,6 +133,7 @@ PENDENTE ──► APROVADO ──► EM_PROCESSAMENTO ──► ENVIADO ──�
 
 ### Credit
 
+- **Amounts:** prices and credit limits have at most two decimal places; requests with more are rejected with `400` instead of being rounded. Responses always show amounts with two decimal places.
 - **Creation:** checks that the available credit (`limit - used`) covers the order total. Nothing is debited.
 - **Approval:** debits the order total from the partner's credit.
 - **Cancellation:** if the order had already been approved (`APROVADO` or `EM_PROCESSAMENTO`), the total is returned to the partner's available credit. Cancelling a `PENDENTE` order does not change the credit.
@@ -154,7 +155,7 @@ Approval must prevent negative balances and double approvals, even under concurr
 
 Refunds follow the same pattern, with `used_credit >= :amount` as the condition.
 
-`ApproveOrderConcurrencyTest` runs parallel approvals, cancellations and idempotent creations against a real PostgreSQL instance.
+`OrderConcurrencyTest` runs parallel approvals, cancellations and idempotent creations against a real PostgreSQL instance.
 
 ### Idempotent order creation
 
@@ -170,7 +171,7 @@ The key is stored in `order_idempotency_key` with `INSERT ... ON CONFLICT DO NOT
 
 Every status change writes an `ORDER_STATUS_CHANGED` event to the `outbox_event` table **in the same transaction** that changes the order. If the operation fails, no event is written; once it commits, the event cannot be lost.
 
-A scheduled job (`OutboxRelay`) reads pending events in order, using `FOR UPDATE SKIP LOCKED` so several instances can run at the same time, publishes them and sets `published_at`. If publishing fails, the batch stops at that event and it is retried on the next run. Delivery is *at-least-once*; consumers can use the `eventId` in the payload to discard duplicates.
+A scheduled job (`OutboxRelay`) reads pending events in order, using `FOR UPDATE SKIP LOCKED` so several instances can run at the same time, publishes them and sets `published_at`. If publishing fails, the batch stops at that event and it is retried on the next run. Delivery is *at-least-once*; consumers can use the `eventId` in the payload to discard duplicates. `JdbcOutboxStoreConcurrencyTest` checks that two relays running at the same time lock different events, and that events locked by a failed relay become available again.
 
 Messaging is simulated by `LoggingNotificationPublisher`, which logs each event:
 

@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-class ApproveOrderConcurrencyTest {
+class OrderConcurrencyTest {
 
     @Autowired
     private CreateOrderService createOrderService;

@@ -2,6 +2,7 @@ package com.humberto.b2b.ordermanagement.order.api;
 
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import com.humberto.b2b.ordermanagement.shared.api.MoneyFormat;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -23,7 +24,7 @@ record OrderResponse(
                 order.id(),
                 order.partnerId(),
                 order.items().stream().map(OrderItemResponse::from).toList(),
-                order.total(),
+                MoneyFormat.of(order.total()),
                 order.status(),
                 order.createdAt(),
                 order.updatedAt()
