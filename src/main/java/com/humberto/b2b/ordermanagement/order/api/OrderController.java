@@ -9,9 +9,15 @@ import com.humberto.b2b.ordermanagement.order.application.OrderSearchCriteria;
 import com.humberto.b2b.ordermanagement.order.application.SearchOrdersService;
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -29,6 +35,9 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/orders")
+@Tag(name = "Orders", description = "Creation, lookup and lifecycle of B2B orders")
+@ApiResponse(responseCode = "400", description = "Invalid request",
+        content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
 class OrderController {
 
     private final CreateOrderService createOrderService;
@@ -53,6 +62,11 @@ class OrderController {
     }
 
     @PostMapping
+    @Operation(summary = "Creates an order",
+            description = "Checks that the partner has enough available credit for the order total, without debiting it.")
+    @ApiResponse(responseCode = "201", description = "Order created with status PENDENTE")
+    @ApiResponse(responseCode = "422", description = "Partner not found or without available credit",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     ResponseEntity<OrderResponse> create(@Valid @RequestBody CreateOrderRequest request) {
         Order order = createOrderService.create(request.partnerId(), request.toDomainItems());
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
@@ -63,6 +77,10 @@ class OrderController {
     }
 
     @GetMapping
+    @Operation(summary = "Searches orders by status and creation period",
+            description = "All filters are optional. The period includes createdFrom and excludes createdTo. "
+                    + "Results are sorted from newest to oldest.")
+    @ApiResponse(responseCode = "200", description = "Page of orders")
     OrderPageResponse search(@RequestParam(required = false) OrderStatus status,
                              @RequestParam(required = false) Instant createdFrom,
                              @RequestParam(required = false) Instant createdTo,
@@ -73,21 +91,50 @@ class OrderController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Gets an order by id")
+    @ApiResponse(responseCode = "200", description = "Order found")
+    @ApiResponse(responseCode = "404", description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse getById(@PathVariable UUID id) {
         return OrderResponse.from(getOrderService.getById(id));
     }
 
     @PostMapping("/{id}/approve")
+    @Operation(summary = "Approves a pending order",
+            description = "Atomically debits the order total from the partner's credit.")
+    @ApiResponse(responseCode = "200", description = "Order approved")
+    @ApiResponse(responseCode = "404", description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "409", description = "Order is not PENDENTE",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "422", description = "Partner without available credit",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse approve(@PathVariable UUID id) {
         return OrderResponse.from(approveOrderService.approve(id));
     }
 
     @PatchMapping("/{id}/status")
+    @Operation(summary = "Advances the order fulfillment status",
+            description = "Accepts EM_PROCESSAMENTO, ENVIADO and ENTREGUE. "
+                    + "APROVADO and CANCELADO use the approval and cancellation endpoints.")
+    @ApiResponse(responseCode = "200", description = "Status updated")
+    @ApiResponse(responseCode = "404", description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "409", description = "Status transition not allowed",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse changeStatus(@PathVariable UUID id, @Valid @RequestBody ChangeOrderStatusRequest request) {
         return OrderResponse.from(changeOrderStatusService.changeStatus(id, request.status()));
     }
 
     @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancels an order",
+            description = "Allowed up to EM_PROCESSAMENTO. If the order had already been approved, "
+                    + "the credit is refunded to the partner.")
+    @ApiResponse(responseCode = "200", description = "Order cancelled")
+    @ApiResponse(responseCode = "404", description = "Order not found",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "409", description = "Order can no longer be cancelled",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse cancel(@PathVariable UUID id) {
         return OrderResponse.from(cancelOrderService.cancel(id));
     }
