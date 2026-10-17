@@ -1,5 +1,7 @@
 # B2B Order Management
 
+[![CI](https://github.com/HubertFer/b2b-order-management/actions/workflows/ci.yml/badge.svg)](https://github.com/HubertFer/b2b-order-management/actions/workflows/ci.yml)
+
 Microservice for managing B2B orders: creation, lookup, status lifecycle, partner credit control and status change notifications.
 
 ## Tech stack
@@ -75,7 +77,7 @@ Keep `SPRING_FLYWAY_LOCATIONS` the same as in `compose.yaml`: once the demo part
 ./mvnw test
 ```
 
-Integration tests start PostgreSQL with Testcontainers, so Docker must be running.
+Integration tests start PostgreSQL with Testcontainers, so Docker must be running. The same suite runs on every push and pull request through GitHub Actions (`.github/workflows/ci.yml`).
 
 ## API
 
