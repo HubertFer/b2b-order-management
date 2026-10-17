@@ -1,9 +1,12 @@
 package com.humberto.b2b.ordermanagement.notification.outbox;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -70,8 +73,76 @@ class OutboxRelayTest {
         assertThrows(IllegalArgumentException.class, () -> relay(published::add, 0));
     }
 
+    @Test
+    void drainPublishesFullBatchesUntilBacklogIsEmpty() {
+        for (int i = 0; i < 7; i++) {
+            store.add();
+        }
+
+        int count = relay(published::add, 3).drain(Duration.ofSeconds(10));
+
+        assertEquals(7, count);
+        assertEquals(7, published.size());
+        assertEquals(List.of(), store.lockPending(10));
+    }
+
+    @Test
+    void drainStopsAtFirstFailure() {
+        OutboxMessage first = store.add();
+        OutboxMessage failing = store.add();
+        store.add();
+        store.add();
+        NotificationPublisher publisher = message -> {
+            if (message.equals(failing)) {
+                throw new IllegalStateException("broker unavailable");
+            }
+            published.add(message);
+        };
+
+        int count = relay(publisher, 1).drain(Duration.ofSeconds(10));
+
+        assertEquals(1, count);
+        assertEquals(List.of(first), published);
+        assertEquals(3, store.lockPending(10).size());
+    }
+
+    @Test
+    void drainStopsWhenTimeIsUp() {
+        for (int i = 0; i < 10; i++) {
+            store.add();
+        }
+        Clock oneSecondPerRead = new Clock() {
+            private Instant current = NOW;
+
+            @Override
+            public ZoneOffset getZone() {
+                return ZoneOffset.UTC;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                Instant value = current;
+                current = current.plusSeconds(1);
+                return value;
+            }
+        };
+        OutboxRelay relay = new OutboxRelay(store, published::add, TransactionOperations.withoutTransaction(),
+                oneSecondPerRead, 2);
+
+        relay.drain(Duration.ofSeconds(5));
+
+        assertEquals(6, published.size());
+        assertEquals(4, store.lockPending(10).size());
+    }
+
     private OutboxRelay relay(NotificationPublisher publisher, int batchSize) {
-        return new OutboxRelay(store, publisher, Clock.fixed(NOW, ZoneOffset.UTC), batchSize);
+        return new OutboxRelay(store, publisher, TransactionOperations.withoutTransaction(),
+                Clock.fixed(NOW, ZoneOffset.UTC), batchSize);
     }
 
     private static class InMemoryOutboxStore implements OutboxStore {
@@ -100,8 +171,8 @@ class OutboxRelayTest {
         }
 
         @Override
-        public void markPublished(long id, Instant publishedAt) {
-            this.publishedAt.put(id, publishedAt);
+        public void markPublished(List<Long> ids, Instant publishedAt) {
+            ids.forEach(id -> this.publishedAt.put(id, publishedAt));
         }
     }
 }

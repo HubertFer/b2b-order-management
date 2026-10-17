@@ -9,5 +9,5 @@ public interface OutboxStore {
 
     List<PendingOutboxMessage> lockPending(int limit);
 
-    void markPublished(long id, Instant publishedAt);
+    void markPublished(List<Long> ids, Instant publishedAt);
 }

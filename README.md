@@ -193,7 +193,7 @@ The key is stored in `order_idempotency_key` with `INSERT ... ON CONFLICT DO NOT
 
 Every status change writes an `ORDER_STATUS_CHANGED` event to the `outbox_event` table **in the same transaction** that changes the order. If the operation fails, no event is written; once it commits, the event cannot be lost.
 
-A scheduled job (`OutboxRelay`) reads pending events in order, using `FOR UPDATE SKIP LOCKED` so several instances can run at the same time, publishes them and sets `published_at`. If publishing fails, the batch stops at that event and it is retried on the next run. Delivery is *at-least-once*; consumers can use the `eventId` in the payload to discard duplicates. `JdbcOutboxStoreConcurrencyTest` checks that two relays running at the same time lock different events, and that events locked by a failed relay become available again.
+A scheduled job (`OutboxRelay`) reads pending events in order, using `FOR UPDATE SKIP LOCKED` so several instances can run at the same time, publishes them and sets `published_at` with a single `UPDATE` per batch. When a batch comes back full, the relay takes the next one right away, each in its own short transaction, until the backlog is empty or `drain-timeout` is reached, so notification throughput keeps up with the order traffic instead of being capped at one batch per interval. If publishing fails, the batch stops at that event and it is retried on the next run. Delivery is *at-least-once*; consumers can use the `eventId` in the payload to discard duplicates. `JdbcOutboxStoreConcurrencyTest` checks that two relays running at the same time lock different events, and that events locked by a failed relay become available again.
 
 Messaging is simulated by `LoggingNotificationPublisher`, which logs each event:
 
@@ -205,8 +205,9 @@ Using a real broker only requires another `NotificationPublisher` implementation
 
 | Property | Default | Description |
 |---|---|---|
-| `notification.outbox.relay-interval` | `PT1S` | Interval between relay runs |
-| `notification.outbox.batch-size` | `50` | Events published per run |
+| `notification.outbox.relay-interval` | `PT1S` | Pause between relay runs once the backlog is empty |
+| `notification.outbox.batch-size` | `50` | Events locked, published and marked per transaction |
+| `notification.outbox.drain-timeout` | `PT10S` | Maximum time a single run keeps draining full batches |
 
 ## Runtime configuration
 
@@ -252,12 +253,12 @@ The run fails if more than 1% of requests return an unexpected status, if the 95
 
 Results on a 24-core development machine, with the application, PostgreSQL and k6 all running in Docker on the same host:
 
-| Load | Requests | Throughput | p95 `order_lifecycle` | p95 `search` | Failed requests | Hot partner |
-|---|---|---|---|---|---|---|
-| `RATE=100` | 26,187 | ~435 req/s | 5.7 ms | 4.4 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 |
-| `RATE=500` | 127,742 | ~2,120 req/s | 6.8 ms | 7.6 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 |
+| Load | Requests | Throughput | p50 / p95 `order_lifecycle` | p50 / p95 `search` | Failed requests | Hot partner | Pending notifications at the end |
+|---|---|---|---|---|---|---|---|
+| `RATE=100` | 26,166 | ~430 req/s | 4.0 / 8.9 ms | 3.7 / 9.5 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 | 12 of 6,095 |
+| `RATE=500` | 124,908 | ~2,060 req/s | 5.8 / 194 ms | 5.0 / 238 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 | 0 of 29,292 |
 
-These numbers come from a single instance with default settings and are meant to show behavior under concurrency, not a production benchmark.
+These numbers come from a single instance with default settings, sharing the machine with the database and k6, and are meant to show behavior under concurrency, not a production benchmark. At `RATE=500` the median stays around 5 ms while the 95th percentile grows with contention for the CPU and the 20 database connections. The last column shows that notifications are published as fast as orders change status: the outbox is empty, or close to it, when the test ends.
 
 ### Limits and next steps
 

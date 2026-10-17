@@ -57,9 +57,14 @@ class JdbcOutboxStore implements OutboxStore {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
-    public void markPublished(long id, Instant publishedAt) {
-        jdbcTemplate.update("UPDATE outbox_event SET published_at = ? WHERE id = ?",
-                toOffsetDateTime(publishedAt), id);
+    public void markPublished(List<Long> ids, Instant publishedAt) {
+        if (ids.isEmpty()) {
+            return;
+        }
+        jdbcTemplate.update("UPDATE outbox_event SET published_at = ? WHERE id = ANY (?)", statement -> {
+            statement.setObject(1, toOffsetDateTime(publishedAt));
+            statement.setArray(2, statement.getConnection().createArrayOf("bigint", ids.toArray()));
+        });
     }
 
     private static OffsetDateTime toOffsetDateTime(Instant instant) {

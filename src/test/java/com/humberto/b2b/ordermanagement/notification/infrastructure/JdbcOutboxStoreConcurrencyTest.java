@@ -75,7 +75,7 @@ class JdbcOutboxStoreConcurrencyTest {
 
         List<UUID> pending = transaction.execute(status -> {
             List<PendingOutboxMessage> locked = outboxStore.lockPending(10);
-            locked.forEach(message -> outboxStore.markPublished(message.id(), Instant.now()));
+            outboxStore.markPublished(locked.stream().map(PendingOutboxMessage::id).toList(), Instant.now());
             return eventIdsOf(locked);
         });
         assertTrue(pending.contains(eventId));
