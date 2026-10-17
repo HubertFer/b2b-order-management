@@ -7,6 +7,7 @@ import com.humberto.b2b.ordermanagement.order.domain.InvalidOrderTransitionExcep
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import com.humberto.b2b.ordermanagement.order.domain.OrderStatusChangedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -28,6 +29,7 @@ class CancelOrderServiceTest {
 
     private final List<Order> savedOrders = new ArrayList<>();
     private final List<BigDecimal> refunds = new ArrayList<>();
+    private final List<OrderStatusChangedEvent> recordedEvents = new ArrayList<>();
 
     @Test
     void cancelsPendingOrderWithoutRefund() {
@@ -39,6 +41,10 @@ class CancelOrderServiceTest {
         assertEquals(CANCELLED_AT, cancelled.updatedAt());
         assertEquals(List.of(cancelled), savedOrders);
         assertEquals(List.of(), refunds);
+        assertEquals(1, recordedEvents.size());
+        assertEquals(OrderStatus.PENDENTE, recordedEvents.getFirst().previousStatus());
+        assertEquals(OrderStatus.CANCELADO, recordedEvents.getFirst().newStatus());
+        assertEquals(CANCELLED_AT, recordedEvents.getFirst().occurredAt());
     }
 
     @Test
@@ -50,6 +56,7 @@ class CancelOrderServiceTest {
         assertEquals(OrderStatus.CANCELADO, cancelled.status());
         assertEquals(List.of(new BigDecimal("25.00")), refunds);
         assertEquals(List.of(cancelled), savedOrders);
+        assertEquals(OrderStatus.APROVADO, recordedEvents.getFirst().previousStatus());
     }
 
     @Test
@@ -74,6 +81,7 @@ class CancelOrderServiceTest {
 
         assertEquals(List.of(), refunds);
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     @Test
@@ -84,6 +92,7 @@ class CancelOrderServiceTest {
 
         assertEquals(List.of(), refunds);
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     @Test
@@ -92,6 +101,7 @@ class CancelOrderServiceTest {
 
         assertEquals(List.of(), refunds);
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     private CancelOrderService serviceFor(Optional<Order> order) {
@@ -104,7 +114,8 @@ class CancelOrderServiceTest {
             savedOrders.add(value);
             return value;
         };
-        return new CancelOrderService(findPort, refundPort, savePort, Clock.fixed(CANCELLED_AT, ZoneOffset.UTC));
+        return new CancelOrderService(findPort, refundPort, savePort, recordedEvents::add,
+                Clock.fixed(CANCELLED_AT, ZoneOffset.UTC));
     }
 
     private static Order createOrder() {

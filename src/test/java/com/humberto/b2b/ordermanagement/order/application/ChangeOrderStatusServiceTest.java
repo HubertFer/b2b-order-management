@@ -6,6 +6,7 @@ import com.humberto.b2b.ordermanagement.order.domain.InvalidOrderTransitionExcep
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import com.humberto.b2b.ordermanagement.order.domain.OrderStatusChangedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -26,6 +27,7 @@ class ChangeOrderStatusServiceTest {
     private static final Instant CHANGED_AT = CREATED_AT.plusSeconds(60);
 
     private final List<Order> savedOrders = new ArrayList<>();
+    private final List<OrderStatusChangedEvent> recordedEvents = new ArrayList<>();
 
     @Test
     void movesApprovedOrderToProcessing() {
@@ -36,6 +38,9 @@ class ChangeOrderStatusServiceTest {
         assertEquals(OrderStatus.EM_PROCESSAMENTO, changed.status());
         assertEquals(CHANGED_AT, changed.updatedAt());
         assertEquals(List.of(changed), savedOrders);
+        assertEquals(1, recordedEvents.size());
+        assertEquals(OrderStatus.APROVADO, recordedEvents.getFirst().previousStatus());
+        assertEquals(OrderStatus.EM_PROCESSAMENTO, recordedEvents.getFirst().newStatus());
     }
 
     @Test
@@ -46,6 +51,7 @@ class ChangeOrderStatusServiceTest {
                 () -> serviceFor(Optional.of(order)).changeStatus(order.id(), OrderStatus.ENVIADO));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     @Test
@@ -57,6 +63,7 @@ class ChangeOrderStatusServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.changeStatus(order.id(), OrderStatus.CANCELADO));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     @Test
@@ -65,6 +72,7 @@ class ChangeOrderStatusServiceTest {
                 () -> serviceFor(Optional.empty()).changeStatus(UUID.randomUUID(), OrderStatus.EM_PROCESSAMENTO));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
     }
 
     private ChangeOrderStatusService serviceFor(Optional<Order> order) {
@@ -73,7 +81,7 @@ class ChangeOrderStatusServiceTest {
             savedOrders.add(value);
             return value;
         };
-        return new ChangeOrderStatusService(findPort, savePort, Clock.fixed(CHANGED_AT, ZoneOffset.UTC));
+        return new ChangeOrderStatusService(findPort, savePort, recordedEvents::add, Clock.fixed(CHANGED_AT, ZoneOffset.UTC));
     }
 
     private static Order createOrder() {

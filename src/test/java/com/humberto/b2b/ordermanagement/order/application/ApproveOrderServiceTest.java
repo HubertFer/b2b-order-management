@@ -7,6 +7,7 @@ import com.humberto.b2b.ordermanagement.order.domain.InvalidOrderTransitionExcep
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderItem;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+import com.humberto.b2b.ordermanagement.order.domain.OrderStatusChangedEvent;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -29,6 +30,8 @@ class ApproveOrderServiceTest {
     private static final Instant CREATED_AT = Instant.parse("2026-10-15T12:00:00Z");
     private static final Instant APPROVED_AT = CREATED_AT.plusSeconds(60);
 
+    private final List<OrderStatusChangedEvent> recordedEvents = new ArrayList<>();
+
     @Test
     void approvesOrderAfterSuccessfulCreditDebit() {
         UUID partnerId = UUID.randomUUID();
@@ -50,6 +53,13 @@ class ApproveOrderServiceTest {
         assertEquals(APPROVED_AT, approved.updatedAt());
         assertEquals(OrderStatus.PENDENTE, order.status());
         assertEquals(List.of(approved), savedOrders);
+        assertEquals(1, recordedEvents.size());
+        OrderStatusChangedEvent event = recordedEvents.getFirst();
+        assertEquals(order.id(), event.orderId());
+        assertEquals(partnerId, event.partnerId());
+        assertEquals(OrderStatus.PENDENTE, event.previousStatus());
+        assertEquals(OrderStatus.APROVADO, event.newStatus());
+        assertEquals(APPROVED_AT, event.occurredAt());
     }
 
     @Test
@@ -65,6 +75,7 @@ class ApproveOrderServiceTest {
         assertThrows(OrderNotFoundException.class, () -> service.approve(UUID.randomUUID()));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
         assertFalse(debitAttempted.get());
     }
 
@@ -84,6 +95,7 @@ class ApproveOrderServiceTest {
                 () -> service.approve(alreadyApproved.id()));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
         assertFalse(debitAttempted.get());
     }
 
@@ -97,19 +109,20 @@ class ApproveOrderServiceTest {
         assertThrows(InsufficientOrderCreditException.class, () -> service.approve(order.id()));
 
         assertEquals(List.of(), savedOrders);
+        assertEquals(List.of(), recordedEvents);
         assertEquals(OrderStatus.PENDENTE, order.status());
     }
 
-    private static ApproveOrderService serviceFor(Optional<Order> order,
-                                                   List<Order> savedOrders,
-                                                   DebitPartnerCreditPort debitPort) {
+    private ApproveOrderService serviceFor(Optional<Order> order,
+                                            List<Order> savedOrders,
+                                            DebitPartnerCreditPort debitPort) {
         FindOrderForUpdatePort findPort = ignored -> order;
         SaveOrderPort savePort = value -> {
             savedOrders.add(value);
             return value;
         };
         Clock clock = Clock.fixed(APPROVED_AT, ZoneOffset.UTC);
-        return new ApproveOrderService(findPort, debitPort, savePort, clock);
+        return new ApproveOrderService(findPort, debitPort, savePort, recordedEvents::add, clock);
     }
 
     private static Order createOrder(UUID partnerId) {
