@@ -87,7 +87,7 @@ Integration tests start PostgreSQL with Testcontainers, so Docker must be runnin
 | `GET` | `/orders/{id}` | Gets an order |
 | `GET` | `/orders?status=&createdFrom=&createdTo=&page=&size=` | Paginated search by status and creation period |
 | `POST` | `/orders/{id}/approve` | Approves the order and debits the partner's credit |
-| `PATCH` | `/orders/{id}/status` | Moves the order to `EM_PROCESSAMENTO`, `ENVIADO` or `ENTREGUE` |
+| `PATCH` | `/orders/{id}/status` | Moves the order to any status allowed by the lifecycle; `APROVADO` and `CANCELADO` apply the same credit rules as `/approve` and `/cancel` |
 | `POST` | `/orders/{id}/cancel` | Cancels the order and refunds the credit if it was debited |
 
 Errors use the `ProblemDetail` format (RFC 9457) with content type `application/problem+json`. Validation errors also list the fields that failed:
@@ -158,7 +158,7 @@ PENDENTE ──► APROVADO ──► EM_PROCESSAMENTO ──► ENVIADO ──�
 - **Approval:** debits the order total from the partner's credit.
 - **Cancellation:** if the order had already been approved (`APROVADO` or `EM_PROCESSAMENTO`), the total is returned to the partner's available credit. Cancelling a `PENDENTE` order does not change the credit.
 
-`APROVADO` and `CANCELADO` can only be reached through their own endpoints, because they change the partner's credit. `PATCH /status` only accepts the fulfillment statuses.
+`PATCH /status` accepts every status. `APROVADO` and `CANCELADO` are delegated to the same use cases as `POST /approve` and `POST /cancel`, so the credit is debited or refunded the same way whichever endpoint is used.
 
 ### Concurrency
 

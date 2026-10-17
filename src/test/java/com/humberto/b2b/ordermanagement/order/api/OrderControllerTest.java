@@ -247,10 +247,8 @@ class OrderControllerTest {
 
         changeStatus(orderId, "ENVIADO")
                 .andExpect(status().isConflict());
-        changeStatus(orderId, "APROVADO")
-                .andExpect(status().isBadRequest());
-        changeStatus(orderId, "CANCELADO")
-                .andExpect(status().isBadRequest());
+        changeStatus(orderId, "PENDENTE")
+                .andExpect(status().isConflict());
         changeStatus(orderId, "DESCONHECIDO")
                 .andExpect(status().isBadRequest());
         mockMvc.perform(patch("/orders/{id}/status", orderId)
@@ -259,6 +257,47 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest());
         changeStatus(UUID.randomUUID().toString(), "EM_PROCESSAMENTO")
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void approvesThroughStatusUpdateAndDebitsCredit() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String orderId = createOrder(partnerId, 2, "10.00");
+
+        changeStatus(orderId, "APROVADO")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APROVADO"));
+        assertEquals(new BigDecimal("20.00"), usedCredit(partnerId));
+
+        changeStatus(orderId, "APROVADO")
+                .andExpect(status().isConflict());
+        assertEquals(new BigDecimal("20.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void rejectsApprovalThroughStatusUpdateWithoutCredit() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String first = createOrder(partnerId, 6, "10.00");
+        String second = createOrder(partnerId, 6, "10.00");
+        changeStatus(first, "APROVADO")
+                .andExpect(status().isOk());
+
+        changeStatus(second, "APROVADO")
+                .andExpect(status().isUnprocessableContent());
+        assertEquals(new BigDecimal("60.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void cancelsThroughStatusUpdateAndRefundsCredit() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String orderId = createOrder(partnerId, 2, "10.00");
+        changeStatus(orderId, "APROVADO")
+                .andExpect(status().isOk());
+
+        changeStatus(orderId, "CANCELADO")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+        assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
     }
 
     @Test

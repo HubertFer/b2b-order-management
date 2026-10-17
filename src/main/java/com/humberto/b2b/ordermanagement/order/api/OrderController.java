@@ -8,6 +8,7 @@ import com.humberto.b2b.ordermanagement.order.application.GetOrderService;
 import com.humberto.b2b.ordermanagement.order.application.OrderCreation;
 import com.humberto.b2b.ordermanagement.order.application.OrderSearchCriteria;
 import com.humberto.b2b.ordermanagement.order.application.SearchOrdersService;
+import com.humberto.b2b.ordermanagement.order.domain.Order;
 import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -128,16 +129,23 @@ class OrderController {
     }
 
     @PatchMapping("/{id}/status")
-    @Operation(summary = "Advances the order fulfillment status",
-            description = "Accepts EM_PROCESSAMENTO, ENVIADO and ENTREGUE. "
-                    + "APROVADO and CANCELADO use the approval and cancellation endpoints.")
+    @Operation(summary = "Updates the order status",
+            description = "Accepts any status allowed by the order lifecycle. APROVADO debits the partner's credit "
+                    + "like POST /approve, and CANCELADO refunds it when needed like POST /cancel.")
     @ApiResponse(responseCode = "200", description = "Status updated")
     @ApiResponse(responseCode = "404", description = "Order not found",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "409", description = "Status transition not allowed",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(responseCode = "422", description = "Partner without available credit for approval",
+            content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     OrderResponse changeStatus(@PathVariable UUID id, @Valid @RequestBody ChangeOrderStatusRequest request) {
-        return OrderResponse.from(changeOrderStatusService.changeStatus(id, request.status()));
+        Order order = switch (request.status()) {
+            case APROVADO -> approveOrderService.approve(id);
+            case CANCELADO -> cancelOrderService.cancel(id);
+            default -> changeOrderStatusService.changeStatus(id, request.status());
+        };
+        return OrderResponse.from(order);
     }
 
     @PostMapping("/{id}/cancel")
