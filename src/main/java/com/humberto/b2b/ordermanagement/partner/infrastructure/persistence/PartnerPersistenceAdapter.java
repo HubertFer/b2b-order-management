@@ -3,6 +3,8 @@ package com.humberto.b2b.ordermanagement.partner.infrastructure.persistence;
 import com.humberto.b2b.ordermanagement.order.application.port.out.DebitPartnerCreditPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindPartnerPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.RefundPartnerCreditPort;
+import com.humberto.b2b.ordermanagement.partner.application.port.out.LoadPartnerPort;
+import com.humberto.b2b.ordermanagement.partner.application.port.out.SavePartnerPort;
 import com.humberto.b2b.ordermanagement.partner.domain.Partner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +15,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-class PartnerPersistenceAdapter implements FindPartnerPort, DebitPartnerCreditPort, RefundPartnerCreditPort {
+class PartnerPersistenceAdapter implements FindPartnerPort, LoadPartnerPort, SavePartnerPort,
+        DebitPartnerCreditPort, RefundPartnerCreditPort {
 
     private final PartnerJpaRepository repository;
 
@@ -25,6 +28,12 @@ class PartnerPersistenceAdapter implements FindPartnerPort, DebitPartnerCreditPo
     @Transactional(readOnly = true)
     public Optional<Partner> findById(UUID partnerId) {
         return repository.findById(partnerId).map(PartnerEntity::toDomain);
+    }
+
+    @Override
+    @Transactional
+    public Partner save(Partner partner) {
+        return repository.save(PartnerEntity.fromDomain(partner)).toDomain();
     }
 
     @Override

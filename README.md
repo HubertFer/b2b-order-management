@@ -30,7 +30,7 @@ The Compose environment seeds two demo partners (`db/demo/R__demo_partners.sql`)
 | `11111111-1111-1111-1111-111111111111` | 10,000.00 |
 | `22222222-2222-2222-2222-222222222222` | 500.00 |
 
-This data is only loaded when `SPRING_FLYWAY_LOCATIONS` includes `classpath:db/demo`, as in `compose.yaml`. The versioned migrations in `db/migration` contain no data.
+This data is only loaded when `SPRING_FLYWAY_LOCATIONS` includes `classpath:db/demo`, as in `compose.yaml`. The versioned migrations in `db/migration` contain no data. New partners can be registered with `POST /partners`.
 
 To stop and remove all data: `docker compose down -v`.
 
@@ -46,6 +46,8 @@ Integration tests start PostgreSQL with Testcontainers, so Docker must be runnin
 
 | Method | Path | Description |
 |---|---|---|
+| `POST` | `/partners` | Registers a partner with a credit limit |
+| `GET` | `/partners/{id}` | Gets a partner with its credit limit, used credit and available credit |
 | `POST` | `/orders` | Creates an order (status `PENDENTE`) |
 | `GET` | `/orders/{id}` | Gets an order |
 | `GET` | `/orders?status=&createdFrom=&createdTo=&page=&size=` | Paginated search by status and creation period |
@@ -58,17 +60,20 @@ Errors use the `ProblemDetail` format (RFC 9457):
 | Status | When |
 |---|---|
 | 400 | Invalid body or parameters |
-| 404 | Order not found |
+| 404 | Order or partner not found |
 | 409 | Status transition not allowed |
 | 422 | Partner not found or without available credit |
 
 ### Example
 
 ```bash
+curl -X POST http://localhost:8080/partners \
+  -H 'Content-Type: application/json' -d '{"creditLimit": 500.00}'
+
 curl -X POST http://localhost:8080/orders \
   -H 'Content-Type: application/json' \
   -d '{
-        "partnerId": "22222222-2222-2222-2222-222222222222",
+        "partnerId": "{partnerId}",
         "items": [
           {"productId": "33333333-3333-3333-3333-333333333333", "quantity": 3, "unitPrice": 100.00}
         ]
@@ -79,6 +84,7 @@ curl -X PATCH http://localhost:8080/orders/{id}/status \
   -H 'Content-Type: application/json' -d '{"status": "EM_PROCESSAMENTO"}'
 curl -X POST http://localhost:8080/orders/{id}/cancel
 curl 'http://localhost:8080/orders?status=CANCELADO&createdFrom=2026-01-01T00:00:00Z'
+curl http://localhost:8080/partners/{partnerId}
 ```
 
 ## Business rules
@@ -150,8 +156,10 @@ order/
   domain/          Order, OrderItem, OrderStatus, transitions and events
   infrastructure/  JPA persistence, outbox and use case wiring
 partner/
+  api/             controller, DTOs and error handling
+  application/     use cases and outbound ports (port/out)
   domain/          Partner
-  infrastructure/  persistence and atomic credit operations
+  infrastructure/  persistence, atomic credit operations and use case wiring
 notification/
   outbox/          relay and storage/publishing contracts
   infrastructure/  JDBC storage, scheduling and simulated publisher
@@ -163,7 +171,7 @@ notification/
 
 ## Decisions and limitations
 
-- **Partner management** is out of scope for the challenge. Partners are inserted directly into the database (demo data in Compose).
+- **Partner management** is limited to registration and balance lookup. The credit limit cannot be changed after registration.
 - **Order creation** does not trigger a notification, since it is not a status change.
 - **Authentication** is not implemented.
 - **Swagger UI** is enabled by default. In production it can be disabled with `springdoc.api-docs.enabled=false` and `springdoc.swagger-ui.enabled=false`.

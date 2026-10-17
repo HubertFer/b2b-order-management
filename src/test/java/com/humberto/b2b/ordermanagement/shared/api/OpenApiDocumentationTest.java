@@ -21,7 +21,7 @@ class OpenApiDocumentationTest {
     private MockMvc mockMvc;
 
     @Test
-    void documentsOrderEndpoints() throws Exception {
+    void documentsApiEndpoints() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.info.title").value("B2B Order Management API"))
@@ -30,7 +30,9 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/orders/{id}'].get").exists())
                 .andExpect(jsonPath("$.paths['/orders/{id}/approve'].post").exists())
                 .andExpect(jsonPath("$.paths['/orders/{id}/status'].patch").exists())
-                .andExpect(jsonPath("$.paths['/orders/{id}/cancel'].post").exists());
+                .andExpect(jsonPath("$.paths['/orders/{id}/cancel'].post").exists())
+                .andExpect(jsonPath("$.paths['/partners'].post").exists())
+                .andExpect(jsonPath("$.paths['/partners/{id}'].get").exists());
     }
 
     @Test

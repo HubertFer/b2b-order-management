@@ -1,4 +1,4 @@
-package com.humberto.b2b.ordermanagement.order.application;
+package com.humberto.b2b.ordermanagement.partner.domain;
 
 import java.util.UUID;
 

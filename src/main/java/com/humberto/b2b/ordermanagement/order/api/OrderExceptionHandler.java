@@ -2,7 +2,7 @@ package com.humberto.b2b.ordermanagement.order.api;
 
 import com.humberto.b2b.ordermanagement.order.application.InsufficientOrderCreditException;
 import com.humberto.b2b.ordermanagement.order.application.OrderNotFoundException;
-import com.humberto.b2b.ordermanagement.order.application.PartnerNotFoundException;
+import com.humberto.b2b.ordermanagement.partner.domain.PartnerNotFoundException;
 import com.humberto.b2b.ordermanagement.order.domain.InvalidOrderTransitionException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;

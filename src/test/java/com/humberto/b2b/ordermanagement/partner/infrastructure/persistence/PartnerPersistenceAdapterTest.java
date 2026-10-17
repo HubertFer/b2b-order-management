@@ -2,6 +2,8 @@ package com.humberto.b2b.ordermanagement.partner.infrastructure.persistence;
 
 import com.humberto.b2b.ordermanagement.TestcontainersConfiguration;
 import com.humberto.b2b.ordermanagement.partner.domain.Partner;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,6 +31,9 @@ class PartnerPersistenceAdapterTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Test
     void findsExistingPartner() {
         UUID partnerId = insertPartner("100.00", "40.00");
@@ -37,6 +42,20 @@ class PartnerPersistenceAdapterTest {
 
         assertTrue(partner.isPresent());
         assertEquals(new Partner(partnerId, new BigDecimal("100.00"), new BigDecimal("40.00")), partner.get());
+    }
+
+    @Test
+    void savesNewPartner() {
+        Partner partner = Partner.create(UUID.randomUUID(), new BigDecimal("250.00"));
+
+        Partner saved = adapter.save(partner);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertEquals(partner, saved);
+        assertEquals(new Partner(partner.id(), new BigDecimal("250.00"), new BigDecimal("0.00")),
+                adapter.findById(partner.id()).orElseThrow());
+        assertEquals(new BigDecimal("0.00"), usedCredit(partner.id()));
     }
 
     @Test
