@@ -2,6 +2,7 @@ package com.humberto.b2b.ordermanagement.partner.infrastructure.persistence;
 
 import com.humberto.b2b.ordermanagement.order.application.port.out.DebitPartnerCreditPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindPartnerPort;
+import com.humberto.b2b.ordermanagement.order.application.port.out.RefundPartnerCreditPort;
 import com.humberto.b2b.ordermanagement.partner.domain.Partner;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-class PartnerPersistenceAdapter implements FindPartnerPort, DebitPartnerCreditPort {
+class PartnerPersistenceAdapter implements FindPartnerPort, DebitPartnerCreditPort, RefundPartnerCreditPort {
 
     private final PartnerJpaRepository repository;
 
@@ -29,11 +30,24 @@ class PartnerPersistenceAdapter implements FindPartnerPort, DebitPartnerCreditPo
     @Override
     @Transactional
     public boolean debitIfAvailable(UUID partnerId, BigDecimal amount) {
+        validate(partnerId, amount);
+        return repository.debitIfAvailable(partnerId, amount) == 1;
+    }
+
+    @Override
+    @Transactional
+    public void refund(UUID partnerId, BigDecimal amount) {
+        validate(partnerId, amount);
+        if (repository.refund(partnerId, amount) != 1) {
+            throw new IllegalStateException("Could not refund " + amount + " to partner " + partnerId);
+        }
+    }
+
+    private static void validate(UUID partnerId, BigDecimal amount) {
         Objects.requireNonNull(partnerId, "partnerId must not be null");
         Objects.requireNonNull(amount, "amount must not be null");
         if (amount.signum() < 0) {
             throw new IllegalArgumentException("amount must not be negative");
         }
-        return repository.debitIfAvailable(partnerId, amount) == 1;
     }
 }

@@ -9,9 +9,11 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderTest {
 
@@ -170,6 +172,18 @@ class OrderTest {
                 () -> Order.restore(id, partnerId, items, BigDecimal.ONE, OrderStatus.PENDENTE, now, null));
         assertThrows(IllegalArgumentException.class,
                 () -> Order.restore(id, partnerId, List.of(), BigDecimal.ONE, OrderStatus.PENDENTE, now, now));
+    }
+
+    @Test
+    void reportsWhetherCreditWasDebited() {
+        Instant now = Instant.parse("2026-10-15T12:00:00Z");
+
+        assertFalse(orderWithStatus(OrderStatus.PENDENTE, now).hasDebitedCredit());
+        assertTrue(orderWithStatus(OrderStatus.APROVADO, now).hasDebitedCredit());
+        assertTrue(orderWithStatus(OrderStatus.EM_PROCESSAMENTO, now).hasDebitedCredit());
+        assertTrue(orderWithStatus(OrderStatus.ENVIADO, now).hasDebitedCredit());
+        assertTrue(orderWithStatus(OrderStatus.ENTREGUE, now).hasDebitedCredit());
+        assertFalse(orderWithStatus(OrderStatus.CANCELADO, now).hasDebitedCredit());
     }
 
     private static Order orderWithStatus(OrderStatus status, Instant createdAt) {

@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -34,6 +35,9 @@ class ApproveOrderConcurrencyTest {
 
     @Autowired
     private ApproveOrderService approveOrderService;
+
+    @Autowired
+    private CancelOrderService cancelOrderService;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -68,7 +72,27 @@ class ApproveOrderConcurrencyTest {
         assertEquals(1, countOrders(partnerId, "APROVADO"));
     }
 
+    @Test
+    void concurrentCancellationsOfApprovedOrderRefundOnlyOnce() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        UUID orderId = createOrder(partnerId, "30.00").id();
+        approveOrderService.approve(orderId);
+
+        List<Throwable> outcomes = runConcurrently(List.of(orderId, orderId, orderId, orderId, orderId),
+                cancelOrderService::cancel);
+
+        assertEquals(1, count(outcomes, null));
+        assertEquals(4, count(outcomes, InvalidOrderTransitionException.class));
+        assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
+        assertEquals(1, countOrders(partnerId, "CANCELADO"));
+    }
+
     private List<Throwable> approveConcurrently(List<UUID> orderIds) throws InterruptedException {
+        return runConcurrently(orderIds, approveOrderService::approve);
+    }
+
+    private List<Throwable> runConcurrently(List<UUID> orderIds, Function<UUID, Order> operation)
+            throws InterruptedException {
         ExecutorService executor = Executors.newFixedThreadPool(orderIds.size());
         CountDownLatch start = new CountDownLatch(1);
         try {
@@ -76,7 +100,7 @@ class ApproveOrderConcurrencyTest {
             for (UUID orderId : orderIds) {
                 Callable<Order> approval = () -> {
                     start.await();
-                    return approveOrderService.approve(orderId);
+                    return operation.apply(orderId);
                 };
                 futures.add(executor.submit(approval));
             }

@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -157,6 +158,98 @@ class OrderControllerTest {
                         .param("createdFrom", "2026-10-02T00:00:00Z")
                         .param("createdTo", "2026-10-01T00:00:00Z"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void movesOrderThroughFulfillmentStatuses() throws Exception {
+        String orderId = createOrder(insertPartner("100.00"), 1, "10.00");
+        mockMvc.perform(post("/orders/{id}/approve", orderId))
+                .andExpect(status().isOk());
+
+        changeStatus(orderId, "EM_PROCESSAMENTO")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EM_PROCESSAMENTO"));
+        changeStatus(orderId, "ENVIADO")
+                .andExpect(status().isOk());
+        changeStatus(orderId, "ENTREGUE")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ENTREGUE"));
+    }
+
+    @Test
+    void rejectsInvalidStatusChanges() throws Exception {
+        String orderId = createOrder(insertPartner("100.00"), 1, "10.00");
+
+        changeStatus(orderId, "ENVIADO")
+                .andExpect(status().isConflict());
+        changeStatus(orderId, "APROVADO")
+                .andExpect(status().isBadRequest());
+        changeStatus(orderId, "CANCELADO")
+                .andExpect(status().isBadRequest());
+        changeStatus(orderId, "DESCONHECIDO")
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch("/orders/{id}/status", orderId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        changeStatus(UUID.randomUUID().toString(), "EM_PROCESSAMENTO")
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void cancelsPendingOrderWithoutTouchingCredit() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String orderId = createOrder(partnerId, 2, "10.00");
+
+        mockMvc.perform(post("/orders/{id}/cancel", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+
+        assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void cancelsApprovedOrderAndRefundsCredit() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String orderId = createOrder(partnerId, 2, "10.00");
+        mockMvc.perform(post("/orders/{id}/approve", orderId))
+                .andExpect(status().isOk());
+        assertEquals(new BigDecimal("20.00"), usedCredit(partnerId));
+
+        mockMvc.perform(post("/orders/{id}/cancel", orderId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+
+        assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void rejectsCancellingShippedOrder() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String orderId = createOrder(partnerId, 1, "10.00");
+        mockMvc.perform(post("/orders/{id}/approve", orderId))
+                .andExpect(status().isOk());
+        changeStatus(orderId, "EM_PROCESSAMENTO")
+                .andExpect(status().isOk());
+        changeStatus(orderId, "ENVIADO")
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/orders/{id}/cancel", orderId))
+                .andExpect(status().isConflict());
+
+        assertEquals(new BigDecimal("10.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void returnsNotFoundWhenCancellingUnknownOrder() throws Exception {
+        mockMvc.perform(post("/orders/{id}/cancel", UUID.randomUUID()))
+                .andExpect(status().isNotFound());
+    }
+
+    private ResultActions changeStatus(String orderId, String newStatus) throws Exception {
+        return mockMvc.perform(patch("/orders/{id}/status", orderId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\": \"%s\"}".formatted(newStatus)));
     }
 
     private ResultActions postOrder(String json) throws Exception {

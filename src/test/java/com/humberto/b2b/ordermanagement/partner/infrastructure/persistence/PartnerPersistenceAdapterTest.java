@@ -85,6 +85,45 @@ class PartnerPersistenceAdapterTest {
         assertEquals(new BigDecimal("40.00"), usedCredit(partnerId));
     }
 
+    @Test
+    void refundsUsedCredit() {
+        UUID partnerId = insertPartner("100.00", "40.00");
+
+        adapter.refund(partnerId, new BigDecimal("25.00"));
+
+        assertEquals(new BigDecimal("15.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void refundsAllUsedCredit() {
+        UUID partnerId = insertPartner("100.00", "40.00");
+
+        adapter.refund(partnerId, new BigDecimal("40.00"));
+
+        assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void rejectsRefundAboveUsedCredit() {
+        UUID partnerId = insertPartner("100.00", "40.00");
+
+        assertThrows(IllegalStateException.class, () -> adapter.refund(partnerId, new BigDecimal("40.01")));
+        assertEquals(new BigDecimal("40.00"), usedCredit(partnerId));
+    }
+
+    @Test
+    void rejectsRefundForUnknownPartner() {
+        assertThrows(IllegalStateException.class, () -> adapter.refund(UUID.randomUUID(), BigDecimal.ONE));
+    }
+
+    @Test
+    void rejectsNegativeRefund() {
+        UUID partnerId = insertPartner("100.00", "40.00");
+
+        assertThrows(IllegalArgumentException.class, () -> adapter.refund(partnerId, new BigDecimal("-1.00")));
+        assertEquals(new BigDecimal("40.00"), usedCredit(partnerId));
+    }
+
     private UUID insertPartner(String creditLimit, String usedCredit) {
         UUID id = UUID.randomUUID();
         jdbcTemplate.update("INSERT INTO partner (id, credit_limit, used_credit) VALUES (?, ?, ?)",
