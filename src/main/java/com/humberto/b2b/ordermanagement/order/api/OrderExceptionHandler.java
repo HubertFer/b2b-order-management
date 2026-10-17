@@ -22,6 +22,11 @@ class OrderExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, exception.getMessage());
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail handleInvalidArgument(IllegalArgumentException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+    }
+
     @ExceptionHandler(InvalidOrderTransitionException.class)
     ProblemDetail handleInvalidTransition(InvalidOrderTransitionException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());

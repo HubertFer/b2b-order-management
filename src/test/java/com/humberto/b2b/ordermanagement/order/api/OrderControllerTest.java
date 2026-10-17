@@ -14,8 +14,13 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -112,6 +117,45 @@ class OrderControllerTest {
         postOrder(orderJson(UUID.randomUUID(), 0, "10.00"))
                 .andExpect(status().isBadRequest());
         postOrder(orderJson(UUID.randomUUID(), 1, "-1.00"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void searchesOrdersByStatusAndPeriod() throws Exception {
+        Instant before = Instant.now();
+        UUID partnerId = insertPartner("100.00");
+        String pendingId = createOrder(partnerId, 1, "10.00");
+        String approvedId = createOrder(partnerId, 1, "10.00");
+        mockMvc.perform(post("/orders/{id}/approve", approvedId))
+                .andExpect(status().isOk());
+        Instant after = Instant.now().plusSeconds(1);
+
+        mockMvc.perform(get("/orders")
+                        .param("status", "APROVADO")
+                        .param("createdFrom", before.toString())
+                        .param("createdTo", after.toString())
+                        .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].id", hasItem(approvedId)))
+                .andExpect(jsonPath("$.content[*].id", not(hasItem(pendingId))))
+                .andExpect(jsonPath("$.content[*].status", everyItem(is("APROVADO"))))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(100));
+    }
+
+    @Test
+    void rejectsInvalidSearchParameters() throws Exception {
+        mockMvc.perform(get("/orders").param("size", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders").param("size", "101"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders").param("page", "-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders").param("status", "DESCONHECIDO"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/orders")
+                        .param("createdFrom", "2026-10-02T00:00:00Z")
+                        .param("createdTo", "2026-10-01T00:00:00Z"))
                 .andExpect(status().isBadRequest());
     }
 
