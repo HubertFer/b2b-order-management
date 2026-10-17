@@ -1,6 +1,7 @@
 package com.humberto.b2b.ordermanagement.order.infrastructure.persistence;
 
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindOrderForUpdatePort;
+import com.humberto.b2b.ordermanagement.order.application.port.out.FindOrderPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.SaveOrderPort;
 import com.humberto.b2b.ordermanagement.order.domain.Order;
 import org.springframework.stereotype.Component;
@@ -10,7 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Component
-class OrderPersistenceAdapter implements SaveOrderPort, FindOrderForUpdatePort {
+class OrderPersistenceAdapter implements SaveOrderPort, FindOrderPort, FindOrderForUpdatePort {
 
     private final OrderJpaRepository repository;
 
@@ -28,6 +29,12 @@ class OrderPersistenceAdapter implements SaveOrderPort, FindOrderForUpdatePort {
                 })
                 .orElseGet(() -> repository.save(OrderEntity.fromDomain(order)));
         return entity.toDomain();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<Order> findById(UUID orderId) {
+        return repository.findById(orderId).map(OrderEntity::toDomain);
     }
 
     @Override

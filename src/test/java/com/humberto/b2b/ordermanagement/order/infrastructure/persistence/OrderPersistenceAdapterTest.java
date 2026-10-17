@@ -77,8 +77,23 @@ class OrderPersistenceAdapterTest {
     }
 
     @Test
+    void findsOrderWithoutLock() {
+        Order order = Order.create(insertPartner(),
+                List.of(new OrderItem(UUID.randomUUID(), 3, new BigDecimal("4.00"))), CREATED_AT);
+        adapter.save(order);
+        clearPersistenceContext();
+
+        Order loaded = adapter.findById(order.id()).orElseThrow();
+
+        assertEquals(order.id(), loaded.id());
+        assertEquals(new BigDecimal("12.00"), loaded.total());
+        assertEquals(order.items(), loaded.items());
+    }
+
+    @Test
     void returnsEmptyForUnknownOrder() {
         assertTrue(adapter.findByIdForUpdate(UUID.randomUUID()).isEmpty());
+        assertTrue(adapter.findById(UUID.randomUUID()).isEmpty());
     }
 
     private UUID insertPartner() {

@@ -1,0 +1,32 @@
+package com.humberto.b2b.ordermanagement.order.api;
+
+import com.humberto.b2b.ordermanagement.order.domain.Order;
+import com.humberto.b2b.ordermanagement.order.domain.OrderStatus;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+record OrderResponse(
+        UUID id,
+        UUID partnerId,
+        List<OrderItemResponse> items,
+        BigDecimal total,
+        OrderStatus status,
+        Instant createdAt,
+        Instant updatedAt
+) {
+
+    static OrderResponse from(Order order) {
+        return new OrderResponse(
+                order.id(),
+                order.partnerId(),
+                order.items().stream().map(OrderItemResponse::from).toList(),
+                order.total(),
+                order.status(),
+                order.createdAt(),
+                order.updatedAt()
+        );
+    }
+}
