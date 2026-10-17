@@ -208,6 +208,34 @@ The service is designed to run as several identical instances behind a load bala
 - **Efficient reads.** Searches are paginated (maximum page size of 100) and backed by indexes on `status`, `created_at` and `partner_id`. Order items of a page are loaded in batches instead of one query per order. Read endpoints use read-only transactions, and `open-in-view` is disabled so connections are released as soon as the transaction ends.
 - **Bounded resources.** Virtual threads accept many concurrent requests cheaply, while the connection pool caps the load each instance puts on the database. The short connection timeout turns overload into fast errors instead of growing queues.
 
+### Load test
+
+A [k6](https://k6.io) script in `load-test/orders.js` runs as a Compose service, so it needs nothing besides Docker:
+
+```bash
+docker compose --profile load-test run --rm k6
+docker compose --profile load-test run --rm -e RATE=500 -e DURATION=2m k6
+```
+
+It runs three scenarios at the same time:
+
+| Scenario | What it does |
+|---|---|
+| `order_lifecycle` | `RATE` iterations per second (default 100), each creating an order with an `Idempotency-Key`, retrying the same request, approving the order and reading it back, spread across 50 partners |
+| `search` | `RATE / 4` paginated searches per second by status |
+| `hot_partner` | 50 concurrent users sending 500 create and approve attempts for a single partner whose credit only covers 100 of them |
+
+The run fails if more than 1% of requests return an unexpected status, if the 95th percentile latency exceeds 500 ms, or if the hot partner ends with its used credit above (or below) its limit.
+
+Results on a 24-core development machine, with the application, PostgreSQL and k6 all running in Docker on the same host:
+
+| Load | Requests | Throughput | p95 `order_lifecycle` | p95 `search` | Failed requests | Hot partner |
+|---|---|---|---|---|---|---|
+| `RATE=100` | 26,187 | ~435 req/s | 5.7 ms | 4.4 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 |
+| `RATE=500` | 127,742 | ~2,120 req/s | 6.8 ms | 7.6 ms | 0% | 100 approved, 400 rejected, used credit 1000 of 1000 |
+
+These numbers come from a single instance with default settings and are meant to show behavior under concurrency, not a production benchmark.
+
 ### Limits and next steps
 
 - **Database connections.** The number of instances times `maximum-pool-size` must stay below PostgreSQL's `max_connections` (100 by default). Beyond that, a connection pooler such as PgBouncer is the next step.
