@@ -10,6 +10,7 @@ import com.humberto.b2b.ordermanagement.order.application.port.out.DebitPartnerC
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindOrderForUpdatePort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindOrderPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.FindPartnerPort;
+import com.humberto.b2b.ordermanagement.order.application.port.out.OrderIdempotencyPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.RecordOrderStatusChangePort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.RefundPartnerCreditPort;
 import com.humberto.b2b.ordermanagement.order.application.port.out.SaveOrderPort;
@@ -28,8 +29,12 @@ class OrderUseCaseConfiguration {
     }
 
     @Bean
-    CreateOrderService createOrderService(FindPartnerPort findPartnerPort, SaveOrderPort saveOrderPort, Clock clock) {
-        return new CreateOrderService(findPartnerPort, saveOrderPort, clock);
+    CreateOrderService createOrderService(FindPartnerPort findPartnerPort,
+                                          SaveOrderPort saveOrderPort,
+                                          FindOrderPort findOrderPort,
+                                          OrderIdempotencyPort orderIdempotencyPort,
+                                          Clock clock) {
+        return new CreateOrderService(findPartnerPort, saveOrderPort, findOrderPort, orderIdempotencyPort, clock);
     }
 
     @Bean

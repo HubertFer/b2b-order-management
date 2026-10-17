@@ -48,7 +48,7 @@ Integration tests start PostgreSQL with Testcontainers, so Docker must be runnin
 |---|---|---|
 | `POST` | `/partners` | Registers a partner with a credit limit |
 | `GET` | `/partners/{id}` | Gets a partner with its credit limit, used credit and available credit |
-| `POST` | `/orders` | Creates an order (status `PENDENTE`) |
+| `POST` | `/orders` | Creates an order (status `PENDENTE`); accepts an optional `Idempotency-Key` header |
 | `GET` | `/orders/{id}` | Gets an order |
 | `GET` | `/orders?status=&createdFrom=&createdTo=&page=&size=` | Paginated search by status and creation period |
 | `POST` | `/orders/{id}/approve` | Approves the order and debits the partner's credit |
@@ -62,7 +62,7 @@ Errors use the `ProblemDetail` format (RFC 9457):
 | 400 | Invalid body or parameters |
 | 404 | Order or partner not found |
 | 409 | Status transition not allowed |
-| 422 | Partner not found or without available credit |
+| 422 | Partner not found, without available credit, or `Idempotency-Key` reused with a different request |
 
 ### Example
 
@@ -72,6 +72,7 @@ curl -X POST http://localhost:8080/partners \
 
 curl -X POST http://localhost:8080/orders \
   -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: 7f3c2a90-order-001' \
   -d '{
         "partnerId": "{partnerId}",
         "items": [
@@ -124,7 +125,17 @@ Approval must prevent negative balances and double approvals, even under concurr
 
 Refunds follow the same pattern, with `used_credit >= :amount` as the condition.
 
-`ApproveOrderConcurrencyTest` runs parallel approvals and cancellations against a real PostgreSQL instance.
+`ApproveOrderConcurrencyTest` runs parallel approvals, cancellations and idempotent creations against a real PostgreSQL instance.
+
+### Idempotent order creation
+
+Clients retrying a `POST /orders` after a timeout must not create duplicate orders. Sending an `Idempotency-Key` header (1 to 100 printable ASCII characters, unique per partner) makes the request safe to retry:
+
+- **First request:** the order is created and the response is `201`.
+- **Same key and same request:** the order created by the first request is returned with `200`, even if the partner no longer has available credit.
+- **Same key with a different request:** `422`.
+
+The key is stored in `order_idempotency_key` with `INSERT ... ON CONFLICT DO NOTHING`, in the same transaction as the order. When two requests with the same key arrive at the same time, the second one waits for the first to commit and then returns the same order. Requests are compared by a SHA-256 fingerprint of the partner and items. Requests without the header behave as before.
 
 ### Notifications (Outbox)
 
@@ -173,5 +184,6 @@ notification/
 
 - **Partner management** is limited to registration and balance lookup. The credit limit cannot be changed after registration.
 - **Order creation** does not trigger a notification, since it is not a status change.
+- **Idempotency keys** are kept indefinitely. A production setup would delete them after a retention period, such as 24 hours.
 - **Authentication** is not implemented.
 - **Swagger UI** is enabled by default. In production it can be disabled with `springdoc.api-docs.enabled=false` and `springdoc.swagger-ui.enabled=false`.

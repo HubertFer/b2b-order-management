@@ -252,10 +252,71 @@ class OrderControllerTest {
                 .content("{\"status\": \"%s\"}".formatted(newStatus)));
     }
 
+    @Test
+    void replaysOrderForRepeatedIdempotencyKey() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String json = orderJson(partnerId, 1, "10.00");
+        String key = UUID.randomUUID().toString();
+
+        String firstId = JsonPath.read(postOrder(json, key)
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString(), "$.id");
+
+        postOrder(json, key)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(firstId));
+        assertEquals(1, countOrders(partnerId));
+    }
+
+    @Test
+    void rejectsIdempotencyKeyReusedWithDifferentRequest() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        String key = UUID.randomUUID().toString();
+        postOrder(orderJson(partnerId, 1, "10.00"), key)
+                .andExpect(status().isCreated());
+
+        postOrder(orderJson(partnerId, 2, "10.00"), key)
+                .andExpect(status().isUnprocessableContent());
+        assertEquals(1, countOrders(partnerId));
+    }
+
+    @Test
+    void scopesIdempotencyKeyByPartner() throws Exception {
+        String key = UUID.randomUUID().toString();
+
+        postOrder(orderJson(insertPartner("100.00"), 1, "10.00"), key)
+                .andExpect(status().isCreated());
+        postOrder(orderJson(insertPartner("100.00"), 1, "10.00"), key)
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void rejectsInvalidIdempotencyKey() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+
+        postOrder(orderJson(partnerId, 1, "10.00"), "key with spaces")
+                .andExpect(status().isBadRequest());
+        postOrder(orderJson(partnerId, 1, "10.00"), "k".repeat(101))
+                .andExpect(status().isBadRequest());
+        assertEquals(0, countOrders(partnerId));
+    }
+
     private ResultActions postOrder(String json) throws Exception {
         return mockMvc.perform(post("/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(json));
+    }
+
+    private ResultActions postOrder(String json, String idempotencyKey) throws Exception {
+        return mockMvc.perform(post("/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Idempotency-Key", idempotencyKey)
+                .content(json));
+    }
+
+    private int countOrders(UUID partnerId) {
+        return jdbcTemplate.queryForObject("SELECT count(*) FROM orders WHERE partner_id = ?",
+                Integer.class, partnerId);
     }
 
     private String createOrder(UUID partnerId, int quantity, String unitPrice) throws Exception {

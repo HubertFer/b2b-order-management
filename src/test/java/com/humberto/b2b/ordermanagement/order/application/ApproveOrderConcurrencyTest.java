@@ -13,8 +13,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -85,6 +87,28 @@ class ApproveOrderConcurrencyTest {
         assertEquals(4, count(outcomes, InvalidOrderTransitionException.class));
         assertEquals(new BigDecimal("0.00"), usedCredit(partnerId));
         assertEquals(1, countOrders(partnerId, "CANCELADO"));
+    }
+
+    @Test
+    void concurrentCreationsWithSameIdempotencyKeyCreateOneOrder() throws Exception {
+        UUID partnerId = insertPartner("100.00");
+        List<OrderItem> items = List.of(new OrderItem(UUID.randomUUID(), 1, new BigDecimal("10.00")));
+        String key = UUID.randomUUID().toString();
+        Set<UUID> returnedIds = ConcurrentHashMap.newKeySet();
+        List<UUID> requests = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            requests.add(UUID.randomUUID());
+        }
+
+        List<Throwable> outcomes = runConcurrently(requests, ignored -> {
+            Order order = createOrderService.create(partnerId, items, key).order();
+            returnedIds.add(order.id());
+            return order;
+        });
+
+        assertEquals(10, count(outcomes, null));
+        assertEquals(1, returnedIds.size());
+        assertEquals(1, countOrders(partnerId, "PENDENTE"));
     }
 
     private List<Throwable> approveConcurrently(List<UUID> orderIds) throws InterruptedException {

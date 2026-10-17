@@ -1,5 +1,6 @@
 package com.humberto.b2b.ordermanagement.order.api;
 
+import com.humberto.b2b.ordermanagement.order.application.IdempotencyKeyReusedException;
 import com.humberto.b2b.ordermanagement.order.application.InsufficientOrderCreditException;
 import com.humberto.b2b.ordermanagement.order.application.OrderNotFoundException;
 import com.humberto.b2b.ordermanagement.partner.domain.PartnerNotFoundException;
@@ -17,7 +18,8 @@ class OrderExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
     }
 
-    @ExceptionHandler({PartnerNotFoundException.class, InsufficientOrderCreditException.class})
+    @ExceptionHandler({PartnerNotFoundException.class, InsufficientOrderCreditException.class,
+            IdempotencyKeyReusedException.class})
     ProblemDetail handleUnprocessable(RuntimeException exception) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, exception.getMessage());
     }
