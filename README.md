@@ -20,6 +20,12 @@ docker compose up --build
 
 Compose starts PostgreSQL and the application at `http://localhost:8080`.
 
+If ports `8080` or `5432` are already in use on your machine, choose other host ports:
+
+```bash
+APP_PORT=9090 POSTGRES_PORT=15432 docker compose up --build
+```
+
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
 - OpenAPI (JSON): http://localhost:8080/v3/api-docs
 - Health: http://localhost:8080/actuator/health, with `/liveness` and `/readiness` probes

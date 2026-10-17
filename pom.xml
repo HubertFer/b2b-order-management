@@ -12,20 +12,7 @@
     <artifactId>b2b-order-management</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>b2b-order-management</name>
-    <description>b2b-order-management</description>
-    <url/>
-    <licenses>
-        <license/>
-    </licenses>
-    <developers>
-        <developer/>
-    </developers>
-    <scm>
-        <connection/>
-        <developerConnection/>
-        <tag/>
-        <url/>
-    </scm>
+    <description>B2B order management microservice with partner credit control and status notifications</description>
     <properties>
         <java.version>21</java.version>
         <springdoc.version>3.1.1</springdoc.version>
