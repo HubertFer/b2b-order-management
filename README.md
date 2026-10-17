@@ -22,6 +22,9 @@ Compose starts PostgreSQL and the application at `http://localhost:8080`.
 
 - Swagger UI: http://localhost:8080/swagger-ui/index.html
 - OpenAPI (JSON): http://localhost:8080/v3/api-docs
+- Health: http://localhost:8080/actuator/health, with `/liveness` and `/readiness` probes
+
+The `app` service has a Docker healthcheck based on the readiness probe, so `docker compose up --wait` returns only when the API is ready to serve requests.
 
 The Compose environment seeds two demo partners (`db/demo/R__demo_partners.sql`):
 
@@ -155,6 +158,18 @@ Using a real broker only requires another `NotificationPublisher` implementation
 |---|---|---|
 | `notification.outbox.relay-interval` | `PT1S` | Interval between relay runs |
 | `notification.outbox.batch-size` | `50` | Events published per run |
+
+## Runtime configuration
+
+| Property | Value | Why |
+|---|---|---|
+| `spring.threads.virtual.enabled` | `true` | Requests and background tasks run on Java 21 virtual threads, so threads blocked on database I/O do not limit how many concurrent requests the service accepts |
+| `spring.datasource.hikari.maximum-pool-size` | `20` | Upper bound on database connections per instance. With virtual threads this pool becomes the real concurrency limit for database work |
+| `spring.datasource.hikari.minimum-idle` | `5` | Keeps connections ready for traffic spikes |
+| `spring.datasource.hikari.connection-timeout` | `3000` (ms) | Fails fast under overload instead of piling up waiting requests |
+| `management.endpoints.web.exposure.include` | `health` | Only the health endpoint is exposed over HTTP |
+
+Every property can be overridden with an environment variable, for example `SPRING_DATASOURCE_HIKARI_MAXIMUMPOOLSIZE=40`.
 
 ## Architecture
 
