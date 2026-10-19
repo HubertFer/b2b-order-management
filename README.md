@@ -359,6 +359,7 @@ notification/
 - The domain is immutable and does not depend on Spring. Transitions return a new `Order` instance.
 - Use cases depend only on ports. Infrastructure adapters implement those ports, and the services are registered in `OrderUseCaseConfiguration`, with no Spring stereotype annotations in the application layer.
 - The `order` module references partners by id only, with no JPA relationship between the entities.
+- These rules are enforced by `ArchitectureTest` (ArchUnit), so a dependency in the wrong direction fails the build.
 
 ## Decisions and limitations
 
