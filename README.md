@@ -20,17 +20,17 @@ Requirement: Docker.
 docker compose up --build
 ```
 
-Compose starts PostgreSQL and the application at `http://localhost:8080`.
+Compose starts PostgreSQL and the application at `http://localhost:8081`.
 
-If ports `8080` or `5432` are already in use on your machine, choose other host ports:
+If ports `8081` or `5432` are already in use on your machine, choose other host ports:
 
 ```bash
 APP_PORT=9090 POSTGRES_PORT=15432 docker compose up --build
 ```
 
-- Swagger UI: http://localhost:8080/swagger-ui/index.html. Every request and response field has a description and an example, and the examples work as-is against the Compose environment: "Try it out" on `POST /orders` uses the demo partner `22222222-2222-2222-2222-222222222222`.
-- OpenAPI (JSON): http://localhost:8080/v3/api-docs
-- Health: http://localhost:8080/actuator/health, with `/liveness` and `/readiness` probes
+- Swagger UI: http://localhost:8081/swagger-ui/index.html. Every request and response field has a description and an example, and the examples work as-is against the Compose environment: "Try it out" on `POST /orders` uses the demo partner `22222222-2222-2222-2222-222222222222`.
+- OpenAPI (JSON): http://localhost:8081/v3/api-docs
+- Health: http://localhost:8081/actuator/health, with `/liveness` and `/readiness` probes
 
 The `app` service has a Docker healthcheck based on the readiness probe, so `docker compose up --wait` returns only when the API is ready to serve requests.
 
@@ -121,7 +121,7 @@ Every step can also be run from the Swagger UI. The walkthrough uses the demo pa
 **1. Register a partner** (or use the demo partner `22222222-2222-2222-2222-222222222222`)
 
 ```bash
-curl -X POST http://localhost:8080/partners \
+curl -X POST http://localhost:8081/partners \
   -H 'Content-Type: application/json' \
   -d '{"creditLimit": 1000.00}'
 ```
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8080/partners \
 **2. Create an order** (`Idempotency-Key` is optional)
 
 ```bash
-curl -X POST http://localhost:8080/orders \
+curl -X POST http://localhost:8081/orders \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: 7f3c2a90-order-001' \
   -d '{
@@ -163,7 +163,7 @@ curl -X POST http://localhost:8080/orders \
 **3. Approve it** (debits the partner's credit)
 
 ```bash
-curl -X PATCH http://localhost:8080/orders/{orderId}/status \
+curl -X PATCH http://localhost:8081/orders/{orderId}/status \
   -H 'Content-Type: application/json' \
   -d '{"status": "APROVADO"}'
 ```
@@ -177,7 +177,7 @@ Notification sent: eventType=ORDER_STATUS_CHANGED ... "previousStatus": "PENDENT
 **4. Check the credit**
 
 ```bash
-curl http://localhost:8080/partners/22222222-2222-2222-2222-222222222222
+curl http://localhost:8081/partners/22222222-2222-2222-2222-222222222222
 ```
 
 ```json
@@ -187,10 +187,10 @@ curl http://localhost:8080/partners/22222222-2222-2222-2222-222222222222
 **5. Move it forward or cancel it**
 
 ```bash
-curl -X PATCH http://localhost:8080/orders/{orderId}/status \
+curl -X PATCH http://localhost:8081/orders/{orderId}/status \
   -H 'Content-Type: application/json' -d '{"status": "EM_PROCESSAMENTO"}'
 
-curl -X POST http://localhost:8080/orders/{orderId}/cancel
+curl -X POST http://localhost:8081/orders/{orderId}/cancel
 ```
 
 Cancelling an approved or processing order returns the `200.00` to the partner's available credit.
@@ -198,7 +198,7 @@ Cancelling an approved or processing order returns the `200.00` to the partner's
 **6. Search**
 
 ```bash
-curl 'http://localhost:8080/orders?status=CANCELADO&createdFrom=2026-10-01T00:00:00Z&createdTo=2026-11-01T00:00:00Z&page=0&size=20'
+curl 'http://localhost:8081/orders?status=CANCELADO&createdFrom=2026-10-01T00:00:00Z&createdTo=2026-11-01T00:00:00Z&page=0&size=20'
 ```
 
 ```json
